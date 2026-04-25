@@ -9,6 +9,7 @@ import json
 import shutil
 import subprocess
 import sys
+from datetime import datetime
 from pathlib import Path
 
 BASE       = Path(__file__).parent
@@ -205,18 +206,26 @@ def step2_youtube(audio_wav: Path, video_files: list[Path], mode: str,
 # ── step 3 ───────────────────────────────────────────────────────────────────
 
 def step3_insta(youtube_vid: Path, insta_last_img: Path,
-                audio_wav: Path) -> Path:
+                audio_wav: Path, clip_duration: int = 9) -> Path:
+    """Build Insta Reels video.
+
+    clip_duration — seconds taken from the start of youtube_vid (default 9).
+    Always appends 2 s of insta-last.png after the clip.
+    Total output length = clip_duration + 2 seconds.
+    """
     tmp = OUTPUT_DIR / "_tmp"
     tmp.mkdir(parents=True, exist_ok=True)
 
-    # 9-sec clip from start of YouTube video, center-cropped to 9:16
+    total_dur = clip_duration + 2
+
+    # clip from start of YouTube video, center-cropped to 9:16
     clip = tmp / "insta_clip.mp4"
     ff("-i", str(youtube_vid),
-       "-t", "9",
+       "-t", str(clip_duration),
        "-vf", f"{SCALE_REELS},{FPS}",
        "-c:v", "libx264", "-pix_fmt", "yuv420p", "-an",
        str(clip),
-       desc="Extracting 9-sec 9:16 clip from YouTube video")
+       desc=f"Extracting {clip_duration}s 9:16 clip from YouTube video")
 
     # 2-sec insta-last.png at 9:16
     last_seg = tmp / "insta_last.mp4"
@@ -231,9 +240,9 @@ def step3_insta(youtube_vid: Path, insta_last_img: Path,
        "-map", "0:v", "-map", "1:a",
        "-c:v", "libx264", "-crf", "23", "-preset", "fast",
        "-c:a", "aac", "-b:a", "192k",
-       "-t", "11",
+       "-t", str(total_dur),
        str(insta_out),
-       desc="Creating insta_reels.mp4  (9:16, 11s)")
+       desc=f"Creating insta_reels.mp4  (9:16, {total_dur}s)")
 
     _cleanup_tmp(tmp)
     return insta_out
@@ -241,6 +250,15 @@ def step3_insta(youtube_vid: Path, insta_last_img: Path,
 
 def _cleanup_tmp(tmp: Path) -> None:
     shutil.rmtree(tmp, ignore_errors=True)
+
+
+def _backup_if_exists(path: Path) -> None:
+    """Rename an existing output file with a timestamp so it is not overwritten."""
+    if path.exists():
+        ts      = datetime.now().strftime("%Y%m%d_%H%M%S")
+        backup  = path.with_stem(f"{path.stem}_{ts}")
+        path.rename(backup)
+        print(f"  ↩ Backed up existing file → {backup.name}")
 
 
 # ── main ─────────────────────────────────────────────────────────────────────
@@ -284,12 +302,14 @@ def main() -> None:
     ])
 
     steps = menu("Steps to run:", [
-        ("All  (Step 1 + 2 + 3)",                                "123"),
-        ("Step 1 only  — Merge audio",                           "1"),
-        ("Step 2 only  — YouTube 4K  (needs merged_audio.wav)",  "2"),
-        ("Step 3 only  — Insta Reels (needs youtube_4k.mp4)",    "3"),
-        ("Steps 1 + 2  — Audio + YouTube",                       "12"),
-        ("Steps 2 + 3  — YouTube + Insta (needs merged_audio.wav)", "23"),
+        ("All  (Step 1 + 2 + 3)",                                         "123"),
+        ("Step 1 only  — Merge audio",                                    "1"),
+        ("Step 2 only  — YouTube 4K  (needs merged_audio.wav)",           "2"),
+        ("Step 3 only  — Insta Reels  9s clip + 2s end  (needs youtube_4k.mp4)", "3"),
+        ("Step 4 only  — Insta Reels 11s clip + 2s end  (needs youtube_4k.mp4)", "4"),
+        ("Steps 1 + 2  — Audio + YouTube",                                "12"),
+        ("Steps 2 + 3  — YouTube + Insta 9s  (needs merged_audio.wav)",  "23"),
+        ("Steps 2 + 4  — YouTube + Insta 11s (needs merged_audio.wav)",  "24"),
     ])
 
     OUTPUT_DIR.mkdir(exist_ok=True)
@@ -297,20 +317,31 @@ def main() -> None:
 
     if "1" in steps:
         print("\n─── Step 1 : Merge Audio ───────────────────────────")
+        _backup_if_exists(OUTPUT_DIR / "merged_audio.wav")
+        _backup_if_exists(OUTPUT_DIR / "merged_audio.mp3")
         wav, mp3 = step1_merge_audio(audio_files)
         print(f"  ✓ {wav.name}")
         print(f"  ✓ {mp3.name}")
 
     if "2" in steps:
         print("\n─── Step 2 : YouTube 4K ────────────────────────────")
+        _backup_if_exists(OUTPUT_DIR / "youtube_4k.mp4")
         yt = step2_youtube(wav, video_files, mode,
                            first_img, last_img, logo_img)
         print(f"  ✓ {yt}")
 
     if "3" in steps:
-        print("\n─── Step 3 : Insta Reels ───────────────────────────")
+        print("\n─── Step 3 : Insta Reels (9s + 2s) ────────────────")
+        _backup_if_exists(OUTPUT_DIR / "insta_reels.mp4")
         yt_vid = OUTPUT_DIR / "youtube_4k.mp4"
-        insta  = step3_insta(yt_vid, insta_last, wav)
+        insta  = step3_insta(yt_vid, insta_last, wav, clip_duration=9)
+        print(f"  ✓ {insta}")
+
+    if "4" in steps:
+        print("\n─── Step 4 : Insta Reels (11s + 2s) ───────────────")
+        _backup_if_exists(OUTPUT_DIR / "insta_reels.mp4")
+        yt_vid = OUTPUT_DIR / "youtube_4k.mp4"
+        insta  = step3_insta(yt_vid, insta_last, wav, clip_duration=11)
         print(f"  ✓ {insta}")
 
     print(f"\n{'=' * 52}")
