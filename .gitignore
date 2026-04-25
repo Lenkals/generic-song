@@ -1,4 +1,11 @@
 output/
+output_old/
+Archive/
 __pycache__/
 *.pyc
 .DS_Store
+
+# large media — store these locally, not in git
+audio/*.wav
+audio/*.mp3
+video/*.mp4
