@@ -222,14 +222,15 @@ def step3_insta(youtube_vid: Path, insta_first_img: Path,
     first_seg = tmp / "insta_first.mp4"
     make_image_seg(insta_first_img, 2, SCALE_REELS, first_seg)
 
-    # clip from start of YouTube video, center-cropped to 9:16
+    # clip from YouTube video, skipping the opening 3s first.png intro,
+    # then center-cropped to 9:16
     clip = tmp / "insta_clip.mp4"
-    ff("-i", str(youtube_vid),
+    ff("-ss", "3", "-i", str(youtube_vid),
        "-t", str(clip_duration),
        "-vf", f"{SCALE_REELS},{FPS}",
        "-c:v", "libx264", "-pix_fmt", "yuv420p", "-an",
        str(clip),
-       desc=f"Extracting {clip_duration}s 9:16 clip from YouTube video")
+       desc=f"Extracting {clip_duration}s 9:16 clip from YouTube video (skip first 3s)")
 
     # 2-sec insta-last.png at 9:16
     last_seg = tmp / "insta_last.mp4"
