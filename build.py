@@ -205,18 +205,22 @@ def step2_youtube(audio_wav: Path, video_files: list[Path], mode: str,
 
 # ── step 3 ───────────────────────────────────────────────────────────────────
 
-def step3_insta(youtube_vid: Path, insta_last_img: Path,
-                audio_wav: Path, clip_duration: int = 9) -> Path:
+def step3_insta(youtube_vid: Path, insta_first_img: Path,
+                insta_last_img: Path, audio_wav: Path,
+                clip_duration: int = 9) -> Path:
     """Build Insta Reels video.
 
-    clip_duration — seconds taken from the start of youtube_vid (default 9).
-    Always appends 2 s of insta-last.png after the clip.
-    Total output length = clip_duration + 2 seconds.
+    Structure: 2s insta-first.png  +  clip_duration s from YouTube  +  2s insta-last.png
+    Total output length = clip_duration + 4 seconds.
     """
     tmp = OUTPUT_DIR / "_tmp"
     tmp.mkdir(parents=True, exist_ok=True)
 
-    total_dur = clip_duration + 2
+    total_dur = clip_duration + 4   # 2s first + clip + 2s last
+
+    # 2-sec insta-first.png at 9:16
+    first_seg = tmp / "insta_first.mp4"
+    make_image_seg(insta_first_img, 2, SCALE_REELS, first_seg)
 
     # clip from start of YouTube video, center-cropped to 9:16
     clip = tmp / "insta_clip.mp4"
@@ -232,7 +236,7 @@ def step3_insta(youtube_vid: Path, insta_last_img: Path,
     make_image_seg(insta_last_img, 2, SCALE_REELS, last_seg)
 
     lst = tmp / "_insta_list.txt"
-    write_concat_list([clip, last_seg], lst)
+    write_concat_list([first_seg, clip, last_seg], lst)
 
     insta_out = OUTPUT_DIR / "insta_reels.mp4"
     ff("-f", "concat", "-safe", "0", "-i", str(lst),
@@ -273,6 +277,7 @@ def main() -> None:
     first_img    = find_image("first")
     last_img     = find_image("last")
     logo_img     = find_image("logo")
+    insta_first  = find_image("insta-first")
     insta_last   = find_image("insta-last")
 
     # validate
@@ -282,7 +287,8 @@ def main() -> None:
     if not video_files:
         errors.append("No .mp4 files found in video/")
     for name, img in (("first", first_img), ("last", last_img),
-                      ("logo", logo_img), ("insta-last", insta_last)):
+                      ("logo", logo_img), ("insta-first", insta_first),
+                      ("insta-last", insta_last)):
         if img is None:
             errors.append(f"Required image not found: {name}.png / .jpg")
     if errors:
@@ -293,8 +299,8 @@ def main() -> None:
 
     print(f"\nAudio  : {[f.name for f in audio_files]}")
     print(f"Videos : {[f.name for f in video_files]}")
-    print(f"Images : first={first_img.name}  last={last_img.name}  "
-          f"logo={logo_img.name}  insta-last={insta_last.name}")
+    print(f"Images : first={first_img.name}  last={last_img.name}  logo={logo_img.name}")
+    print(f"         insta-first={insta_first.name}  insta-last={insta_last.name}")
 
     mode = menu("Video playback mode:", [
         ("Round Robin — videos cycle in order, each plays fully, repeat to fill song", "roundrobin"),
@@ -331,17 +337,17 @@ def main() -> None:
         print(f"  ✓ {yt}")
 
     if "3" in steps:
-        print("\n─── Step 3 : Insta Reels (9s + 2s) ────────────────")
+        print("\n─── Step 3 : Insta Reels (2s first + 9s clip + 2s last) ─")
         _backup_if_exists(OUTPUT_DIR / "insta_reels.mp4")
         yt_vid = OUTPUT_DIR / "youtube_4k.mp4"
-        insta  = step3_insta(yt_vid, insta_last, wav, clip_duration=9)
+        insta  = step3_insta(yt_vid, insta_first, insta_last, wav, clip_duration=9)
         print(f"  ✓ {insta}")
 
     if "4" in steps:
-        print("\n─── Step 4 : Insta Reels (11s + 2s) ───────────────")
+        print("\n─── Step 4 : Insta Reels (2s first + 11s clip + 2s last) ─")
         _backup_if_exists(OUTPUT_DIR / "insta_reels.mp4")
         yt_vid = OUTPUT_DIR / "youtube_4k.mp4"
-        insta  = step3_insta(yt_vid, insta_last, wav, clip_duration=11)
+        insta  = step3_insta(yt_vid, insta_first, insta_last, wav, clip_duration=11)
         print(f"  ✓ {insta}")
 
     print(f"\n{'=' * 52}")
